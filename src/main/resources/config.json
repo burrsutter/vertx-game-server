@@ -1,0 +1,8 @@
+{
+  "internal-server-verticle-instances" : 1,
+  "server-verticle-instances" : 1,
+  "game-verticle-instances": 1,
+  "traffic-verticle-instances": 1,
+  "board-verticle-instances": 1,
+  "score-timer-verticle-instances": 1
+}
