@@ -26,7 +26,11 @@ public class GameUtils {
     public String getPath() {
       return path;
     }
-  }
+    public String toString() {
+      return this.host + ":" + port + "/" + path;
+    }
+
+  }  // Endpoint
 
   public static Endpoint retrieveEndpoint(final String env, final int testPort, final String testPath) {
     String endpoint = System.getenv(env);

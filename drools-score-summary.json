@@ -1,0 +1,16 @@
+{
+	"lookup": "SummarySession",
+	"commands": [{
+		"insert": {
+			"object": {
+				"com.redhatkeynote.score.ScoreSummary": {
+					"topPlayers": 10
+				}
+			},
+			"out-identifier": "scoreSummary",
+			"return-object": true
+		}
+	}, {
+		"fire-all-rules": {}
+	}]
+}

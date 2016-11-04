@@ -45,7 +45,7 @@ public class InternalServiceVerticle extends AbstractVerticle {
 
     internalRouter.post("/configurationUpdated").handler(this::configurationUpdated);
     internalRouter.get("/testMechanicsServer").handler(this::testMechanicsServer);
-    internalRouter.putWithRegex("/testAchievementServer/achievement/update/.*").handler(this::testAchievementServerUpdate);
+    // internalRouter.putWithRegex("/testAchievementServer/achievement/update/.*").handler(this::testAchievementServerUpdate);
     internalRouter.getWithRegex("/testAchievementServer/achievement/.*").handler(this::testAchievementServerAchievement);
     internalRouter.delete("/testAchievementServer/reset").handler(this::testAchievementServerReset);
     internalRouter.post("/testScoreServer").handler(this::testScoreServer);

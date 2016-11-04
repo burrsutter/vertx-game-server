@@ -32,6 +32,12 @@ Tests are simulating a couple of loads, so may takes a bit of time to run.
 mvn compile exec:exec@run
 ```
 
+## Redeploy for Dev
+
+```
+vertx run src/main/java/com/redhat/middleware/keynote/MainVerticle.java -cluster -cp target/game-service.jar --redeploy=src/main/**/* --launcher-class=io.vertx.core.Launcher --on-redeploy="mvn compile package -DskipTests"
+```
+
 ## Configuration
 
 You can pass a configuration object using: `-conf my-configuration.json`.
@@ -43,3 +49,10 @@ This configuration can contain:
 * `port`: the HTTP server port, `9001` by default
 * `number-of-teams`: the number of teams, 4 by default
 * `score-broadcast-interval`: the period in ms between 2 score broadcast, 2500 by default
+
+export ACHIEVEMENTS_SERVER=localhost
+export ACHIEVEMENTS_SERVER_PORT=9090
+export SCORE_SERVER=localhost
+export SCORE_SERVER_PORT=8080
+export SCORE_USER=kiewb
+export SCORE_PASSWORD=kiewb
