@@ -661,7 +661,7 @@ class GameVerticle extends GroovyVerticle {
     if (achievements && achievements.size() > 0) {
 
       def path = achievementPath + "/achievement/update/" + uuid;
-      LOGGER.info("Achievement Achieved! " + player.username + " " + Json.encode(achievements) + " " + uuid);
+      LOGGER.info("GameVerticle.groovy Achievement Achieved! " + player.username + " " + Json.encode(achievements) + " " + uuid);
       
       LOGGER.finest("Achievemnt host:" + achievementHost)
       LOGGER.finest("port: " + achievementPort)

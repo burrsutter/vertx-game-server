@@ -280,23 +280,32 @@ public class ScoreTimerVerticle extends AbstractVerticle {
       LOGGER.finest("! sendTopPlayerScores achievementClient.get Host: " + achievementEndpoint.getHost()); 
       LOGGER.finest("! sendTopPlayerScores achievementClient.get Port: " + achievementEndpoint.getPort());
       LOGGER.finest("! sendTopPlayerScores achievementClient.get Path: " + path);
-
+      // maps to /api/achievement/:uuid
       final HttpClientRequest scoreRequest = achievementClient.get(achievementEndpoint.getPort(), achievementEndpoint.getHost(), path, resp -> {
         resp.exceptionHandler(t -> {
           t.printStackTrace();
           future.complete();
         });
         if (resp.statusCode() == 200) {
-          LOGGER.finest("! 200");
+          
           resp.bodyHandler(body -> {
             final JsonArray achievementResponse = body.toJsonArray();
+            int size = achievementResponse.size();
             final JsonObject achievements = new JsonObject();
-            LOGGER.finest("! achievementResponse: " + achievementResponse);
-            for(int count = 0 ; count < achievementResponse.size(); count++) {
+            LOGGER.info("Player " + uuid + " has " + size + " achievements: " + achievementResponse);
+            
+            for(int count = 0 ; count < size; count++) {
               final JsonObject achievement = achievementResponse.getJsonObject(count);
-              LOGGER.finest("! achievement: " + achievement);
-              achievements.put(achievement.getString("achievementType"), true); // this was "type"
-            }
+              LOGGER.info(count + " Achievement: " + achievement);
+              Boolean achieved = achievement.getBoolean("achieved");
+              String achievementType = achievement.getString("achievementType");
+              if (achieved.booleanValue() == true) {
+                LOGGER.info(" AchievementType: " + achievementType + " is true");
+                achievements.put(achievementType, true);
+              }
+               
+            } // for
+            LOGGER.info("BURR achievements: " + achievements);
             playerScore.put("achievements", achievements);
             future.complete();
           });
@@ -309,7 +318,7 @@ public class ScoreTimerVerticle extends AbstractVerticle {
           .putHeader("Content-Type", "application/json")
           .setTimeout(10000)
           .exceptionHandler(t -> {
-            LOGGER.info("! Exception " + t);
+            LOGGER.severe("! Exception " + t);
             t.printStackTrace();
             future.complete();
           });
