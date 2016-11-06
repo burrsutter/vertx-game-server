@@ -50,7 +50,8 @@ public class BurrSummary extends AbstractVerticle {
       "}";
 
     int numTopPlayers = 10;
-    /*
+
+    /* this is to build the JsonObject programmatically 
     JsonObject input = new JsonObject();
     
     JsonObject topPlayers = new JsonObject();
@@ -108,11 +109,18 @@ public class BurrSummary extends AbstractVerticle {
           final JsonObject valuex = keyvalue.getJsonObject("value");
           final JsonObject scoreSummary = valuex.getJsonObject("com.redhatkeynote.score.ScoreSummary");
           
-          final JsonArray stuff = scoreSummary.getJsonArray("topPlayerScores");
-
-          // System.out.println("HERE " + stuff);
+          
+          final JsonArray topPlayerScores = scoreSummary.getJsonArray("topPlayerScores");
+          
+          System.out.println("topPlayerScores: " + topPlayerScores);
          
-          vertx.eventBus().publish("/leaders", stuff);
+          vertx.eventBus().publish("/leaders", topPlayerScores);
+
+          final JsonArray teamScores = scoreSummary.getJsonArray("teamScores");
+
+          // System.out.println("teamScores: " + teamScores);
+
+          // vertx.eventBus().publish("/scores",teamScores);
           
         });      
       } // if 200    
@@ -133,7 +141,14 @@ public class BurrSummary extends AbstractVerticle {
 
   } // start() method
 
-
+  private void collectPlayerAchievements(JsonArray topPlayerScores) {
+    final int playerCount = topPlayerScores.size();
+    for(int index = 0 ; index < playerCount ; index++) {
+      JsonObject playerScore = topPlayerScores.getJsonObject(index);
+      final String uuid = playerScore.getString("uuid");
+    } // for
+  }
+/*
   private void handleResponse(JsonObject output) {
         
         // JsonObject json = output.toJsonObject();
@@ -165,5 +180,6 @@ public class BurrSummary extends AbstractVerticle {
          System.out.println(achievement.getInteger("score"));  
        } // while 
 
-  }
+  } // handleReponse
+  */
 }

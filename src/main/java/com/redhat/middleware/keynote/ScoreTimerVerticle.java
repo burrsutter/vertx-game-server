@@ -5,6 +5,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 import com.redhat.middleware.keynote.GameUtils.Endpoint;
 
@@ -20,6 +22,8 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.Counter;
 
 public class ScoreTimerVerticle extends AbstractVerticle {
+  private final static Logger LOGGER = Logger.getLogger(ScoreTimerVerticle.class.getName());
+  
 
   private static final String SUMMARY_REQUEST_PREFIX = "{" +
       "\"lookup\"   : \"SummarySession\"," +
@@ -45,6 +49,7 @@ public class ScoreTimerVerticle extends AbstractVerticle {
 
   @Override
   public void start(Future<Void> future) throws Exception {
+    LOGGER.setLevel(Level.INFO);
     final long interval = config().getLong("interval", 500L);
     final int numTopPlayers = config().getInteger("numTopPlayers", 10);
     final int testPort = config().getInteger("innerPort", 9002);
@@ -54,13 +59,13 @@ public class ScoreTimerVerticle extends AbstractVerticle {
     String achievementPortEnv = System.getenv("ACHIEVEMENTS_SERVER_PORT").trim();
     String scorePortEnv = System.getenv("SCORE_SERVER_PORT").trim();
 
-    achievementEndpoint = GameUtils.retrieveEndpoint("ACHIEVEMENTS_SERVER", Integer.parseInt(achievementPortEnv), "api");
-    System.out.println("! achievementEndpoint: " + achievementEndpoint);
-    final Endpoint scoreEndpoint = GameUtils.retrieveEndpoint("SCORE_SERVER", Integer.parseInt(scorePortEnv), "kie-server/services/rest/server/containers/instances/score");
-    System.out.println("! scoreEndpoint: " + scoreEndpoint);
+    achievementEndpoint = GameUtils.retrieveEndpoint("ACHIEVEMENTS_SERVER", Integer.parseInt(achievementPortEnv), "/api");
+    LOGGER.finest("! achievementEndpoint: " + achievementEndpoint);
+    final Endpoint scoreEndpoint = GameUtils.retrieveEndpoint("SCORE_SERVER", Integer.parseInt(scorePortEnv), "/kie-server/services/rest/server/containers/instances/score");
+    LOGGER.finest("! scoreEndpoint: " + scoreEndpoint);
     String scoreUser = System.getenv("SCORE_USER");
     String scorePassword = System.getenv("SCORE_PASSWORD");
-    System.out.println("! Score user: |" + scoreUser + "| password: |" + scorePassword + "|");
+    LOGGER.finest("! Score user: |" + scoreUser + "| password: |" + scorePassword + "|");
     final String scoreAuthHeader;
     
     if ((scoreUser != null) && (scorePassword != null)) {
@@ -70,7 +75,7 @@ public class ScoreTimerVerticle extends AbstractVerticle {
       scoreAuthHeader = null;
     }
 
-    System.out.println("! scoreAuthHeader: " + scoreAuthHeader);   
+    LOGGER.finest("! scoreAuthHeader: " + scoreAuthHeader);   
     // Should only need 1
     scoreClientOptions = new HttpClientOptions().setMaxPoolSize(20);
 
@@ -88,18 +93,21 @@ public class ScoreTimerVerticle extends AbstractVerticle {
         periodicStream.handler(time -> {
           periodicStream.pause();
           HttpClient scoreClient = vertx.createHttpClient(scoreClientOptions);
-          System.out.println("! scoreEndpoint.getPort " + scoreEndpoint.getPort());
-          System.out.println("! scoreEndpoint.getHost " + scoreEndpoint.getHost());
-          System.out.println("! scoreEndpoint.getPath " + scoreEndpoint.getPath());
-
+          LOGGER.finest("! scoreEndpoint.getPort " + scoreEndpoint.getPort());
+          LOGGER.finest("! scoreEndpoint.getHost " + scoreEndpoint.getHost());
+          LOGGER.finest("! scoreEndpoint.getPath " + scoreEndpoint.getPath());
+          
+          // Poll the score server to grab team scores and top N players
+          // the payload of the POST request is way down by scoreRequestString
           final HttpClientRequest scoreRequest = scoreClient.post(scoreEndpoint.getPort(), scoreEndpoint.getHost(), scoreEndpoint.getPath(), resp -> {
             resp.exceptionHandler(t -> {
+              LOGGER.info("! resp.exceptionHandler ");
               t.printStackTrace();
               scoreClient.close();
               periodicStream.resume();
             });
             
-            System.out.println("! resp.statusCode(): " + resp.statusCode());
+            LOGGER.finest("! resp.statusCode(): " + resp.statusCode());
 
             if (resp.statusCode() == 200) {
               resp.bodyHandler(body -> {
@@ -128,9 +136,17 @@ public class ScoreTimerVerticle extends AbstractVerticle {
                 }
               });
             } else { // not 200
+              LOGGER.finest("! not 200 bodyHandler START");
+              resp.bodyHandler(body -> {
+                LOGGER.finest("! body Class: " + body.getClass().getName());
+                LOGGER.finest("! body: " + body);
+                // JsonObject bodyAsJsonObject = body.toJsonObject();
+                // String content = new JsonObject(body).encode();                
+              });
+              LOGGER.finest("! not 200 bodyHandler END");
               scoreClient.close();
               
-              System.out.println("! Received error response from Score endpoint: " + resp.statusMessage());
+              LOGGER.finest("! Received error response from Score endpoint: " + resp.statusMessage());
               periodicStream.resume();
             }
           })
@@ -145,8 +161,10 @@ public class ScoreTimerVerticle extends AbstractVerticle {
               });
           
           String scoreRequestString = SUMMARY_REQUEST_PREFIX + numTopPlayers + SUMMARY_REQUEST_SUFFIX;
-          System.out.println("! scoreRequestString: " + scoreRequestString);
+          LOGGER.finest("! scoreRequestString: " + scoreRequestString);
+          
           scoreRequest.end(scoreRequestString);
+
         });
         future.complete();
       } else { // if (ar.succeeded())
@@ -215,7 +233,7 @@ public class ScoreTimerVerticle extends AbstractVerticle {
           teamCounterFuture.complete();
         });
       } else {
-        System.out.println("Could not find teamCounter for team: " + teamCounter);
+        LOGGER.info("Could not find teamCounter for team: " + teamCounter);
       }
       Counter teamPopCounter = teamPopCounters.get(team);
       if (teamPopCounter != null) {
@@ -228,7 +246,7 @@ public class ScoreTimerVerticle extends AbstractVerticle {
           teamPopCounterFuture.complete();
         });
       } else {
-        System.out.println("Could not find teamPopCounter for team: " + teamCounter);
+        LOGGER.info("Could not find teamPopCounter for team: " + teamCounter);
       }
     }
 
@@ -246,36 +264,44 @@ public class ScoreTimerVerticle extends AbstractVerticle {
     }
   }
 
+  // gathers the achievements for the top N players
   private Future sendTopPlayerScores(JsonArray topPlayerScores) {
     final List<Future> futures = new ArrayList<>();
     final int playerCount = topPlayerScores.size();
     for(int index = 0 ; index < playerCount ; index++) {
       JsonObject playerScore = topPlayerScores.getJsonObject(index);
       final String uuid = playerScore.getString("uuid");
-
+      LOGGER.finest("! fetching achievements for " + uuid);
       final Future future = Future.future();
       futures.add(future);
 
       String path = achievementEndpoint.getPath() + "/achievement/" + uuid;
-      System.out.println("! acheievement " + achievementEndpoint +  path);
+      LOGGER.fine("! achievementEndpoint " + achievementEndpoint);
+      LOGGER.finest("! sendTopPlayerScores achievementClient.get Host: " + achievementEndpoint.getHost()); 
+      LOGGER.finest("! sendTopPlayerScores achievementClient.get Port: " + achievementEndpoint.getPort());
+      LOGGER.finest("! sendTopPlayerScores achievementClient.get Path: " + path);
+
       final HttpClientRequest scoreRequest = achievementClient.get(achievementEndpoint.getPort(), achievementEndpoint.getHost(), path, resp -> {
         resp.exceptionHandler(t -> {
           t.printStackTrace();
           future.complete();
         });
         if (resp.statusCode() == 200) {
+          LOGGER.finest("! 200");
           resp.bodyHandler(body -> {
             final JsonArray achievementResponse = body.toJsonArray();
             final JsonObject achievements = new JsonObject();
+            LOGGER.finest("! achievementResponse: " + achievementResponse);
             for(int count = 0 ; count < achievementResponse.size(); count++) {
               final JsonObject achievement = achievementResponse.getJsonObject(count);
-              achievements.put(achievement.getString("type"), true);
+              LOGGER.finest("! achievement: " + achievement);
+              achievements.put(achievement.getString("achievementType"), true); // this was "type"
             }
             playerScore.put("achievements", achievements);
             future.complete();
           });
         } else {
-          System.out.println("ScoreTimerVerticle.java: Received error response from Achievement endpoint: " + resp.statusMessage());
+          LOGGER.info("ScoreTimerVerticle.java: Received error response from Achievement endpoint: " + resp.statusMessage());
           future.complete();
         }
       })
@@ -283,6 +309,7 @@ public class ScoreTimerVerticle extends AbstractVerticle {
           .putHeader("Content-Type", "application/json")
           .setTimeout(10000)
           .exceptionHandler(t -> {
+            LOGGER.info("! Exception " + t);
             t.printStackTrace();
             future.complete();
           });

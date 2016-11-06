@@ -49,8 +49,8 @@ public class MainVerticle extends AbstractVerticle {
             deployVerticleIfNeeded(ServerVerticle.class.getName(), serverDeploymentOptions),
             deployVerticleIfNeeded(InternalServiceVerticle.class.getName(), internalDeploymentOptions),
             deployVerticleIfNeeded(TrafficServerVerticle.class.getName(), trafficDeploymentOptions),
-            //deployVerticleIfNeeded(ScoreTimerVerticle.class.getName(), scoreTimerDeploymentOptions),
-            deployVerticleIfNeeded(BurrSummary.class.getName(), scoreTimerDeploymentOptions),
+            deployVerticleIfNeeded(ScoreTimerVerticle.class.getName(), scoreTimerDeploymentOptions),
+            // deployVerticleIfNeeded(BurrSummary.class.getName(), scoreTimerDeploymentOptions),
             deployVerticleIfNeeded(BoardVerticle.class.getName(), boardDeploymentOptions)
         )
         .setHandler(reporter(future));

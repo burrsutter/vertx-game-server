@@ -11,8 +11,13 @@ import io.vertx.lang.groovy.GroovyVerticle
 import java.util.Map
 import io.vertx.core.AsyncResult;
 import io.vertx.core.AsyncResultHandler;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+
 
 class GameVerticle extends GroovyVerticle {
+
+  private final static Logger LOGGER = Logger.getLogger(GameVerticle.class.getName());
 
   // Configuration and constants
   public static final Map<String, Serializable> DEFAULT_CONF = [
@@ -94,6 +99,8 @@ class GameVerticle extends GroovyVerticle {
 
   @Override
   public void start(Future<Void> future) throws Exception {
+    LOGGER.setLevel(Level.INFO);
+
     num_teams = (int) context.config().get("number-of-teams", 4)
     score_broadcast_interval = (int) context.config().get("score-broadcast-interval", 2500)
     teams = Team.createTeams(num_teams)
@@ -116,7 +123,7 @@ class GameVerticle extends GroovyVerticle {
     // BURR
     // (achievementHost, achievementPort, achievementPath) = retrieveEndpoint("ACHIEVEMENTS_SERVER", testPort, "/testAchievementServer");
     def achievementPortEnv = System.getenv("ACHIEVEMENTS_SERVER_PORT")?.trim()
-    (achievementHost, achievementPort, achievementPath) = retrieveEndpoint("ACHIEVEMENTS_SERVER", Integer.parseInt(achievementPortEnv), "api");
+    (achievementHost, achievementPort, achievementPath) = retrieveEndpoint("ACHIEVEMENTS_SERVER", Integer.parseInt(achievementPortEnv), "/api");
     println("Achievement Server host: " + achievementHost + ", port " + achievementPort + ", path: " + achievementPath)
     
     def scorePortEnv = System.getenv("SCORE_SERVER_PORT")?.trim()
@@ -344,10 +351,6 @@ class GameVerticle extends GroovyVerticle {
           int consecutive = message.getOrDefault('consecutive', 0)
           boolean goldenSnitchPopped = message.getOrDefault('goldenSnitchPopped', false)
           
-          // BURR          
-          // updateATeamScore(player, score, consecutive, goldenSnitchPopped);
-
-          // old way with BRMS
           sendScore(player, score, consecutive, goldenSnitchPopped);
           
           teamPopCounters[team.number]?.addAndGet(1, {});
@@ -361,35 +364,6 @@ class GameVerticle extends GroovyVerticle {
       m.reply(player.userId)
     });
   }
-
-  // BURR
-  /*
-  private void updateATeamScore(Player player, int score, int consecutivePops, boolean goldenSnitchPopped) {
-    
-    System.out.println("Player: " + player.username + " ");
-    System.out.println("Player id: " + player.userId + " ");
-    System.out.println("Score: " + score + " ");
-    System.out.println("Teamd ID: " + player.team.number + " ");
-    System.out.println("Team Score: " + player.team.score + " ");
-    System.out.println("Consecutive: " + consecutivePops);
-    
-    int deltaScore = 0;
-    
-    vertx.sharedData().getClusterWideMap("PLAYER_SCORES", { ar -> 
-      if (ar.failed()) {
-        System.out.println("FAILED getClusterWideMap");        
-      } else {
-        AsyncMap<String,Integer> playerScores = ar.result();
-        System.out.println("AsyncMap acquired");
-        Integer oldScore = playerScores.getAt(player.userId);
-        deltaScore = score - oldScore.intValue();
-        System.out.println("deltaScore: " + deltaScore)
-
-        playerScores.putAt(player.userId, score)
-      }
-    });
-  }
-  */
 
   private Handler<Message> onConfigurationUpdated() {
     { msg ->
@@ -424,7 +398,7 @@ class GameVerticle extends GroovyVerticle {
 
   // send score to score server, if there are any achievements returned then send them to achievement server plus client
   def sendScore(Player player, int score, int consecutivePops, boolean goldenSnitchPopped) {
-    println(" sendScore ")
+    // println(" sendScore ")
     def currentAggregatedScore = player.aggregatedScore.get();
     if (currentAggregatedScore == null) {
       println(" currentAggregatedScore == null ")
@@ -435,7 +409,7 @@ class GameVerticle extends GroovyVerticle {
         sendScore(player, score, consecutivePops, goldenSnitchPopped)
       }
     } else {
-      println(" else ")
+      // println(" else ")
       def aggregatedScore = new AggregatedScore(
               score > currentAggregatedScore.score ? score : currentAggregatedScore.score,
               consecutivePops > currentAggregatedScore.consecutivePops ? consecutivePops : currentAggregatedScore.consecutivePops,
@@ -446,7 +420,7 @@ class GameVerticle extends GroovyVerticle {
         sendScore(player, score, consecutivePops, goldenSnitchPopped)
       } else if (currentAggregatedScore.isDefaulted()) {
         // If the previous aggregate has default scores then the previous request has finished so we restart
-        println("processSend")
+        // println("processSend")
         processSend(player)
       }
     }
@@ -507,17 +481,19 @@ class GameVerticle extends GroovyVerticle {
         processSend(player)
       }
     })
+    /*
     println("scoreClient.post")
     println("scoreHost: " + scoreHost)
     println("scorePort: " + scorePort)
     println("scorePath: " + scorePath)
+    */
     def clientRequest = scoreClient.post(scorePort, scoreHost, scorePath, { resp ->
       resp.exceptionHandler({ t ->
         t.printStackTrace();
         retryProcessSend(attempt, player, aggregatedScore, future)
       });
       if (resp.statusCode() == 200) {
-        println("200")
+        // println("200")
         resp.bodyHandler { body ->
           def bodyContents = body.toString()
           Map response = Json.decodeValue(bodyContents, Map.class);
@@ -685,11 +661,18 @@ class GameVerticle extends GroovyVerticle {
     if (achievements && achievements.size() > 0) {
 
       def path = achievementPath + "/achievement/update/" + uuid;
-      println("BURR " + achievementHost + ":" + achievementPort + "/" + path);
+      LOGGER.info("Achievement Achieved! " + player.username + " " + Json.encode(achievements) + " " + uuid);
+      
+      LOGGER.finest("Achievemnt host:" + achievementHost)
+      LOGGER.finest("port: " + achievementPort)
+      LOGGER.finest("path: " + path)
+
       achievementClient.put(achievementPort, achievementHost, path, { resp ->
         // We don't read the body, no need for exception handler here.
-        if (resp.statusCode() != 200) {
-          println("GameVerticle.groovy:processUpdateAchievements Received error response from Achievement endpoint: " + resp.statusMessage());
+        if (resp.statusCode() != 200) {  
+          LOGGER.info("GameVerticle.groovy:processUpdateAchievements Received  response from Achievement endpoint: " + resp.statusMessage());
+          
+          LOGGER.finest(Json.encode(achievements));
         }
         future.complete()
       })
@@ -704,13 +687,13 @@ class GameVerticle extends GroovyVerticle {
 
   def resetAchievements() {
     def path = achievementPath + "/reset";
-
+    LOGGER.info("resetAchievements reset path: " + path)
     Future future = Future.future()
     achievementClient.delete(achievementPort, achievementHost, path, { resp ->
       // We don't read the body, no need for exception handler here.
       future.complete()
       if (resp.statusCode() != 204) {
-        println("GameVerticle.groovy:resetAchievements Received error response from Achievement endpoint: " + resp.statusMessage());
+        LOGGER.info("GameVerticle.groovy:resetAchievements Response from Achievement endpoint: " + resp.statusMessage());
       }
     })
             .setTimeout(3000)
@@ -721,7 +704,7 @@ class GameVerticle extends GroovyVerticle {
   }
 
   def broadcastTeamScores() {
-    System.out.println("TEAM BROADCAST");
+    // System.out.println("TEAM BROADCAST");
     teams.each { i, team ->
       def message = [
               type : 'team-score',
